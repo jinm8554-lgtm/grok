@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grok Aurora Studio</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <h1>🎨 Grok Aurora Studio</h1>
+                <p>Unlimited Image & Video Generation</p>
+            </div>
+            <div class="auth-status">
+                <div id="authStatus" class="status-indicator">
+                    <span id="statusText">Checking...</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main">
+            <!-- Left Panel: Controls -->
+            <aside class="controls-panel">
+                <div class="panel-section">
+                    <h2>Generation Mode</h2>
+                    <div class="mode-selector">
+                        <button class="mode-btn active" data-mode="image">
+                            🖼️ Image
+                        </button>
+                        <button class="mode-btn" data-mode="video">
+                            🎬 Video
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Image Controls -->
+                <div id="imageControls" class="panel-section">
+                    <h3>Image Settings</h3>
+                    
+                    <label>Aspect Ratio</label>
+                    <select id="aspectRatio" class="input-select">
+                        <option value="1:1">Square (1:1)</option>
+                        <option value="16:9">Landscape (16:9)</option>
+                        <option value="9:16">Portrait (9:16)</option>
+                        <option value="3:2">Classic (3:2)</option>
+                        <option value="2:3">Tall (2:3)</option>
+                    </select>
+
+                    <label>Quality</label>
+                    <select id="quality" class="input-select">
+                        <option value="standard">Standard</option>
+                        <option value="high">High</option>
+                    </select>
+                </div>
+
+                <!-- Video Controls -->
+                <div id="videoControls" class="panel-section" style="display: none;">
+                    <h3>Video Settings</h3>
+                    
+                    <label>Duration (seconds)</label>
+                    <select id="duration" class="input-select">
+                        <option value="6">6 seconds</option>
+                        <option value="12">12 seconds</option>
+                    </select>
+
+                    <label>Aspect Ratio</label>
+                    <select id="videoDimensionRatio" class="input-select">
+                        <option value="16:9">Landscape (16:9)</option>
+                        <option value="9:16">Portrait (9:16)</option>
+                        <option value="1:1">Square (1:1)</option>
+                    </select>
+
+                    <label>Resolution</label>
+                    <select id="resolution" class="input-select">
+                        <option value="480p">480p</option>
+                        <option value="720p">720p (if available)</option>
+                    </select>
+                </div>
+
+                <!-- Prompt Input -->
+                <div class="panel-section">
+                    <h3>Prompt</h3>
+                    <textarea 
+                        id="prompt" 
+                        class="input-textarea" 
+                        placeholder="Describe what you want to generate..."
+                        rows="6"
+                    ></textarea>
+                    <div class="char-count">
+                        <span id="charCount">0</span> / 2000
+                    </div>
+                </div>
+
+                <!-- Generate Button -->
+                <button id="generateBtn" class="btn btn-primary btn-large">
+                    Generate
+                </button>
+
+                <!-- Status -->
+                <div id="statusPanel" class="panel-section status-section" style="display: none;">
+                    <h3>Status</h3>
+                    <div id="statusMessage" class="status-message"></div>
+                </div>
+            </aside>
+
+            <!-- Right Panel: Results -->
+            <section class="results-panel">
+                <div class="results-header">
+                    <h2>Results</h2>
+                    <button id="clearBtn" class="btn btn-secondary" style="display: none;">
+                        Clear
+                    </button>
+                </div>
+
+                <div id="resultsList" class="results-list">
+                    <div class="empty-state">
+                        <p>👈 Enter a prompt and click Generate to start</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loadingOverlay" class="loading-overlay" style="display: none;">
+        <div class="spinner"></div>
+        <p id="loadingText">Generating...</p>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
