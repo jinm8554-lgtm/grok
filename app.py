@@ -1,10 +1,11 @@
 """
 Grok Aurora Studio - FastAPI Backend
 Provides REST and WebSocket endpoints for image/video generation
+Uses Playwright browser bridge to bypass x-statsig-id restriction
 """
 
-from fastapi import FastAPI, WebSocket, HTTPException, File, UploadFile
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import FastAPI, WebSocket, HTTPException
+from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 import asyncio
@@ -13,11 +14,11 @@ import os
 from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel
-import aiohttp
 from grok_client import GrokClient
 
 
-# Models
+# ── Models ────────────────────────────────────────────────────────────────────
+
 class GenerateImageRequest(BaseModel):
     prompt: str
     aspect_ratio: str = "1:1"
@@ -35,10 +36,15 @@ class CookiesRequest(BaseModel):
     cookies: dict
 
 
-# Initialize FastAPI app
-app = FastAPI(title="Grok Aurora Studio", version="1.0.0")
+class TestGenerateRequest(BaseModel):
+    prompt: str = "a cute cat sitting on a windowsill"
+    mode: str = "image"   # "image" or "video"
 
-# Add CORS middleware
+
+# ── App setup ─────────────────────────────────────────────────────────────────
+
+app = FastAPI(title="Grok Aurora Studio", version="2.0.0")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -47,20 +53,17 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Store for active connections and session cookies
-active_connections: dict = {}
 session_cookies: Optional[dict] = None
 
-
-# Static files
 static_dir = Path(__file__).parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
 
+# ── Basic endpoints ────────────────────────────────────────────────────────────
+
 @app.get("/")
 async def root():
-    """Serve main HTML"""
     html_file = static_dir / "index.html"
     if html_file.exists():
         return FileResponse(str(html_file), media_type="text/html")
@@ -69,21 +72,19 @@ async def root():
 
 @app.get("/health")
 async def health():
-    """Health check endpoint"""
     return {
         "status": "ok",
         "service": "grok-aurora-studio",
-        "cookies_loaded": session_cookies is not None
+        "version": "2.0.0",
+        "cookies_loaded": session_cookies is not None,
+        "cookie_count": len(session_cookies) if session_cookies else 0,
     }
 
 
+# ── Cookie management ─────────────────────────────────────────────────────────
+
 @app.post("/api/cookies")
 async def set_cookies(request: CookiesRequest):
-    """
-    Set browser cookies for Grok authentication
-    
-    Expected cookies: sso, cf_clearance, etc.
-    """
     global session_cookies
     session_cookies = request.cookies
     return {
@@ -95,55 +96,113 @@ async def set_cookies(request: CookiesRequest):
 
 @app.get("/api/cookies")
 async def get_cookies():
-    """Get current cookie status"""
     return {
         "loaded": session_cookies is not None,
         "keys": list(session_cookies.keys()) if session_cookies else []
     }
 
 
+# ── Test endpoint ─────────────────────────────────────────────────────────────
+
+@app.post("/api/test-generate")
+async def test_generate(request: TestGenerateRequest):
+    """
+    Quick test endpoint: runs a real generation and returns all SSE events.
+    Use this to verify the browser bridge is working end-to-end.
+    """
+    if not session_cookies:
+        raise HTTPException(
+            status_code=401,
+            detail="No authentication cookies. POST to /api/cookies first."
+        )
+
+    events = []
+    try:
+        async with GrokClient(cookies=session_cookies) as client:
+            if request.mode == "video":
+                gen = client.generate_video(prompt=request.prompt)
+            else:
+                gen = client.generate_image(prompt=request.prompt)
+
+            async for chunk in gen:
+                event = json.loads(chunk)
+                events.append(event)
+                # Stop early once we have the final result
+                if event.get("status") in ("complete", "error"):
+                    break
+
+        return {"ok": True, "events": events}
+
+    except Exception as e:
+        return {"ok": False, "error": str(e)}
+
+
+# ── REST generation endpoints ─────────────────────────────────────────────────
+
+@app.post("/api/generate-image")
+async def generate_image(request: GenerateImageRequest):
+    if not session_cookies:
+        raise HTTPException(status_code=401, detail="No authentication cookies.")
+
+    results = []
+    async with GrokClient(cookies=session_cookies) as client:
+        async for chunk in client.generate_image(
+            prompt=request.prompt,
+            aspect_ratio=request.aspect_ratio,
+            quality=request.quality
+        ):
+            results.append(json.loads(chunk))
+
+    return {"results": results}
+
+
+@app.post("/api/generate-video")
+async def generate_video(request: GenerateVideoRequest):
+    if not session_cookies:
+        raise HTTPException(status_code=401, detail="No authentication cookies.")
+
+    results = []
+    async with GrokClient(cookies=session_cookies) as client:
+        async for chunk in client.generate_video(
+            prompt=request.prompt,
+            duration=request.duration,
+            aspect_ratio=request.aspect_ratio,
+            resolution=request.resolution
+        ):
+            results.append(json.loads(chunk))
+
+    return {"results": results}
+
+
+# ── WebSocket endpoints ───────────────────────────────────────────────────────
+
 @app.websocket("/ws/generate-image")
 async def websocket_generate_image(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time image generation
-    
-    Expected message format:
-    {
-        "prompt": "...",
-        "aspect_ratio": "1:1",
-        "quality": "standard"
-    }
-    """
     await websocket.accept()
-    
     try:
         while True:
             data = await websocket.receive_text()
             request = json.loads(data)
-            
+
             if not session_cookies:
                 await websocket.send_json({
                     "status": "error",
                     "message": "No authentication cookies. Please set cookies first."
                 })
                 continue
-            
-            # Generate image via Grok client
+
             async with GrokClient(cookies=session_cookies) as client:
-                async for progress in client.generate_image(
+                async for chunk in client.generate_image(
                     prompt=request.get("prompt", ""),
                     aspect_ratio=request.get("aspect_ratio", "1:1"),
                     quality=request.get("quality", "standard")
                 ):
-                    await websocket.send_text(progress)
-    
+                    await websocket.send_text(chunk)
+
     except Exception as e:
         try:
-            await websocket.send_json({
-                "status": "error",
-                "message": str(e)
-            })
-        except:
+            await websocket.send_json({"status": "error", "message": str(e)})
+        except Exception:
             pass
     finally:
         await websocket.close()
@@ -151,109 +210,46 @@ async def websocket_generate_image(websocket: WebSocket):
 
 @app.websocket("/ws/generate-video")
 async def websocket_generate_video(websocket: WebSocket):
-    """
-    WebSocket endpoint for real-time video generation
-    
-    Expected message format:
-    {
-        "prompt": "...",
-        "duration": 6,
-        "aspect_ratio": "16:9",
-        "resolution": "480p"
-    }
-    """
     await websocket.accept()
-    
     try:
         while True:
             data = await websocket.receive_text()
             request = json.loads(data)
-            
+
             if not session_cookies:
                 await websocket.send_json({
                     "status": "error",
                     "message": "No authentication cookies. Please set cookies first."
                 })
                 continue
-            
-            # Generate video via Grok client
+
             async with GrokClient(cookies=session_cookies) as client:
-                async for progress in client.generate_video(
+                async for chunk in client.generate_video(
                     prompt=request.get("prompt", ""),
                     duration=request.get("duration", 6),
                     aspect_ratio=request.get("aspect_ratio", "16:9"),
                     resolution=request.get("resolution", "480p")
                 ):
-                    await websocket.send_text(progress)
-    
+                    await websocket.send_text(chunk)
+
     except Exception as e:
         try:
-            await websocket.send_json({
-                "status": "error",
-                "message": str(e)
-            })
-        except:
+            await websocket.send_json({"status": "error", "message": str(e)})
+        except Exception:
             pass
     finally:
         await websocket.close()
 
 
-@app.post("/api/generate-image")
-async def generate_image(request: GenerateImageRequest):
-    """
-    REST endpoint for image generation (non-streaming)
-    """
-    if not session_cookies:
-        raise HTTPException(
-            status_code=401,
-            detail="No authentication cookies. Please set cookies first."
-        )
-    
-    results = []
-    async with GrokClient(cookies=session_cookies) as client:
-        async for progress in client.generate_image(
-            prompt=request.prompt,
-            aspect_ratio=request.aspect_ratio,
-            quality=request.quality
-        ):
-            results.append(json.loads(progress))
-    
-    return {"results": results}
-
-
-@app.post("/api/generate-video")
-async def generate_video(request: GenerateVideoRequest):
-    """
-    REST endpoint for video generation (non-streaming)
-    """
-    if not session_cookies:
-        raise HTTPException(
-            status_code=401,
-            detail="No authentication cookies. Please set cookies first."
-        )
-    
-    results = []
-    async with GrokClient(cookies=session_cookies) as client:
-        async for progress in client.generate_video(
-            prompt=request.prompt,
-            duration=request.duration,
-            aspect_ratio=request.aspect_ratio,
-            resolution=request.resolution
-        ):
-            results.append(json.loads(progress))
-    
-    return {"results": results}
-
+# ── Entry point ───────────────────────────────────────────────────────────────
 
 if __name__ == "__main__":
     import uvicorn
-    
-    # Create static directory if it doesn't exist
+
     static_dir.mkdir(exist_ok=True)
-    
-    print("Starting Grok Aurora Studio...")
+    print("Starting Grok Aurora Studio v2 (Playwright bridge)...")
     print("Open http://localhost:8000 in your browser")
-    
+
     uvicorn.run(
         app,
         host="0.0.0.0",
