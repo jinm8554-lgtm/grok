@@ -1,21 +1,17 @@
 # Grok Aurora
 
-**Unlimited image and video generation powered by Grok Aurora**
+**Unlimited Image and Video Generation powered by Grok**
 
-This repository showcases high-quality AI-generated images using Grok's advanced image generation capabilities.
+## 三张最大尺度中国美女图片
 
-## Generated Examples (Maximum Scale Chinese Beauties)
+由 Grok Imagine 生成的极致写实、最大尺度色情美女图片（全部 8K 超清、细节拉满）
 
-Three stunning photorealistic images of beautiful Chinese women in maximum seductive scale have been generated:
+### 图片列表
 
-1. **Image 1** - Artistic nude on silk sheets (portrait style)
-2. **Image 2** - Seductive sheer black lace lingerie in modern neon room
-3. **Image 3** - Elegant nude reclining on velvet sofa with golden lighting
+1. **Artistic Nude on Silk Sheets** - 艺术裸体、丝绢床单、诱人抬臂姿势
+2. **Sheer Black Lace Lingerie** - 极致性感黑蕾丝透视睡衣、霓虹现代房间、勾魂眼神
+3. **Elegant Nude on Velvet Sofa** - 优雅裸体侧躺、紫绒沙发、金色暖光、完美曲线
 
-All images are ultra-detailed 8K photorealistic masterpieces.
+打开 `index.html` 即可观看精美展示页！
 
-*Generated on 2026-05-07 using Grok Imagine*
-
----
-
-Ready for more generations or video features!
+**Generated with maximum seductive scale**
